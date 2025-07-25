@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Oldest RecNet Mentions</title>
+  <style>
+    body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
+    #gallery { display: flex; flex-wrap: wrap; gap: 12px; }
+    #gallery a { text-decoration: none; }
+    #gallery img { width: 240px; border-radius: 8px; box-shadow: 0 0 6px #000; transition: transform 0.2s; }
+    #gallery img:hover { transform: scale(1.05); }
+    #status { margin-bottom: 1rem; }
+    input { padding: 4px 6px; margin-right: 6px; }
+    button { padding: 5px 12px; }
+  </style>
+</head>
+<body>
+  <h1>Oldest Photos You're Mentioned In</h1>
+
+  <div>
+    <input id="playerIdInput" type="number" placeholder="Your Player ID" value="1" />
+    <input id="filterIdsInput" type="text" placeholder="Only show if also with Player IDs (comma separated)" />
+    <button onclick="load()">Load Oldest Mentions</button>
+  </div>
+
+  <div id="status">Waiting for input...</div>
+  <div id="gallery"></div>
+
+  <script>
+    const gallery = document.getElementById('gallery');
+    const status = document.getElementById('status');
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    async function fetchAll(playerId) {
+      let all = [];
+      let skip = 0;  // Leave 0
+      const take = 1000;  //This is how many photos it pulls at once
+      const delayMs = 500; //This is in miliseconds
+      // The current settings are recommended so you don't get rate limited.
+
+      while (true) {
+        status.textContent = `Fetching... skip=${skip}`;
+        const res = await fetch(`/api/feed?playerId=${playerId}&skip=${skip}&take=${take}`);
+        if (!res.ok) {
+          status.textContent = `Error fetching: ${res.status}`;
+          break;
+        }
+
+        const data = await res.json();
+        if (data.length === 0) break;
+
+        all.push(...data);
+        skip += data.length;
+
+        await sleep(delayMs);
+      }
+
+      return all.reverse();
+    }
+
+    function display(images, filterIds) {
+      gallery.innerHTML = '';
+      let count = 0;
+
+      images.forEach(img => {
+        const tagged = img.TaggedPlayerIds || [];
+        const match = filterIds.length === 0 || filterIds.some(id => tagged.includes(id));
+
+        if (match) {
+          const link = document.createElement('a');
+          link.href = `https://rec.net/image/${img.Id}`;
+          link.target = '_blank';
+
+          const el = document.createElement('img');
+          el.src = `https://img.rec.net/${img.ImageName}`;
+          el.alt = `Photo ${img.Id}`;
+
+          link.appendChild(el);
+          gallery.appendChild(link);
+          count++;
+        }
+      });
+
+      status.textContent = count === 0
+        ? 'No photos found with the selected filters.'
+        : `Found ${count} photos (oldest first)`;
+    }
+
+    async function load() {
+      const playerId = document.getElementById('playerIdInput').value.trim();
+      const filterRaw = document.getElementById('filterIdsInput').value.trim();
+
+      if (!playerId) return alert('Enter your Player ID');
+
+      const filterIds = filterRaw
+        .split(',')
+        .map(id => parseInt(id.trim()))
+        .filter(id => !isNaN(id) && id !== parseInt(playerId));
+
+      status.textContent = 'Loading...';
+      const images = await fetchAll(playerId);
+      display(images, filterIds);
+    }
+  </script>
+</body>
+</html>
