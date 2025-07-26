@@ -5,6 +5,12 @@ This project is used to check what photos you're mentioned in. Typically on rec.
 For support, questions, and suggestions contact "pxdzy" on discord
 
 # How To Use
+Go To "Releases" 
+
+Download RecNet.Mention.Viewer.Setup.1.0.0.exe 
+
+Run the .exe
+
 Load up the app and enter an account name in the "Enter Account Name" section.
 
 Click Load, This will then load all the photos you're mentioned in as long as they are public. If you don't have access to an image without being logged in you wont be able to see it.
