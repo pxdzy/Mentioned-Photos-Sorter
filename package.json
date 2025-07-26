@@ -1,0 +1,34 @@
+{
+  "name": "recnet-mention-viewer",
+  "version": "1.0.0",
+  "description": "An app to view oldest photos you're mentioned in by username.",
+  "author": "Rinu",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "electron": "^29.4.6",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.Rinus.recnetviewer",
+    "productName": "RecNet Mention Viewer",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "icon": "build/icon.ico"
+  }
+}

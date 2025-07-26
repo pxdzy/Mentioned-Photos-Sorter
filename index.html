@@ -3,107 +3,281 @@
 <head>
   <meta charset="UTF-8" />
   <title>Oldest RecNet Mentions</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@3.3.2/dist/tailwind.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
   <style>
-    body { background: #111; color: white; font-family: sans-serif; padding: 20px; }
-    #gallery { display: flex; flex-wrap: wrap; gap: 12px; }
-    #gallery a { text-decoration: none; }
-    #gallery img { width: 240px; border-radius: 8px; box-shadow: 0 0 6px #000; transition: transform 0.2s; }
-    #gallery img:hover { transform: scale(1.05); }
-    #status { margin-bottom: 1rem; }
-    input { padding: 4px 6px; margin-right: 6px; }
-    button { padding: 5px 12px; }
+    .filter-chip {
+      display: inline-block;
+      margin: 0.2rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+      background-color: #374151;
+      color: #E5E7EB;
+      font-size: 0.875rem;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.2s;
+    }
+
+    .filter-chip:hover {
+      background-color: #4B5563;
+    }
   </style>
 </head>
 <body>
-  <h1>Oldest Photos You're Mentioned In</h1>
 
-  <div>
-    <input id="playerIdInput" type="number" placeholder="Your Player ID" value="1" />
-    <input id="filterIdsInput" type="text" placeholder="Only show if also with Player IDs (comma separated)" />
-    <button onclick="load()">Load Oldest Mentions</button>
-  </div>
+  <header class="flex justify-between items-center gap-4 p-4 bg-gray-800 shadow-md rounded-t-md max-w-5xl mx-auto w-full">
+    <div class="flex items-center gap-2">
+      <label for="usernameInput" class="sr-only">Enter Account Name</label>
+      <input
+        id="usernameInput"
+        type="text"
+        placeholder="Enter Username"
+        class="rounded px-3 py-2 bg-gray-700 border border-gray-600 focus:border-blue-500"
+      />
+      <button id="loadBtn" class="btn-primary" type="button">Load</button>
+    </div>
 
-  <div id="status">Waiting for input...</div>
-  <div id="gallery"></div>
+    <div class="flex items-center gap-3">
+      <button
+        id="filtersToggleBtn"
+        class="btn-toggle"
+        aria-expanded="false"
+        aria-controls="filtersPanel"
+        type="button"
+      >
+        Filters
+      </button>
+    </div>
+  </header>
+
+  <section id="filtersPanel" class="max-w-5xl mx-auto bg-gray-800 rounded-b-md shadow-md p-6 mt-0 mb-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div class="col-span-2 space-y-6">
+      <div class="space-y-2">
+        <label for="filterUsernameInput" class="font-semibold block">Filter by Username</label>
+        <div class="flex gap-2">
+          <input
+            id="filterUsernameInput"
+            type="text"
+            placeholder="Enter Account Name"
+            class="flex-1 rounded px-2 py-1 bg-gray-700 border border-gray-600"
+          />
+          <select id="filterMode" class="rounded px-2 py-1 bg-gray-700 border border-gray-600 text-white">
+            <option value="include">Include</option>
+            <option value="exclude">Exclude</option>
+          </select>
+          <button class="btn-primary" onclick="addUsernameToFilter()" type="button">Add Filter</button>
+        </div>
+      </div>
+
+      <div class="flex flex-col md:flex-row gap-6">
+        <div class="flex-1">
+          <label for="sortOrder" class="font-semibold mb-1 block">Sort Order</label>
+          <select id="sortOrder" class="w-full rounded px-3 py-2 bg-gray-700 border border-gray-600">
+            <option value="oldest">Oldest First</option>
+            <option value="newest">Newest First</option>
+          </select>
+        </div>
+
+        <div class="flex-1">
+          <label for="yearSelect" class="font-semibold mb-1 block">Year</label>
+          <select id="yearSelect" class="w-full rounded px-3 py-2 bg-gray-700 border border-gray-600">
+            <option value="all">All Years</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div id="activeFiltersBox">
+      <h2 class="text-white font-semibold mb-2">Active Filters</h2>
+      <div id="activeFiltersSummary" class="text-sm text-gray-300">No active filters</div>
+    </div>
+  </section>
+
+  <div id="status" class="max-w-5xl mx-auto px-4 mb-4 text-center text-gray-400"></div>
+
+  <main id="gallery" class="max-w-5xl mx-auto px-4 flex flex-wrap justify-center">
+  </main>
+
+  <footer class="mt-auto p-4 text-center text-gray-500">
+    Made by Rinu.
+  </footer>
 
   <script>
     const gallery = document.getElementById('gallery');
     const status = document.getElementById('status');
+    const filtersToggleBtn = document.getElementById('filtersToggleBtn');
+    const filtersPanel = document.getElementById('filtersPanel');
+    const loadBtn = document.getElementById('loadBtn');
+    const activeFiltersSummary = document.getElementById('activeFiltersSummary');
+    const usernameInput = document.getElementById('usernameInput');
+    const filterUsernameInput = document.getElementById('filterUsernameInput');
+    const filterMode = document.getElementById('filterMode');
+    const sortOrderSelect = document.getElementById('sortOrder');
+    const yearSelect = document.getElementById('yearSelect');
 
-    function sleep(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
+    let includeIds = [];
+    let excludeIds = [];
+    let idToNameMap = {};
+    let cachedPhotos = [];
+
+    filtersToggleBtn.addEventListener('click', () => {
+      const isOpen = filtersPanel.classList.toggle('open');
+      filtersToggleBtn.setAttribute('aria-expanded', isOpen);
+    });
+
+    function updateActiveFiltersSummary() {
+      const summary = [];
+
+      if (includeIds.length) {
+        const tags = includeIds.map(id => {
+          const name = idToNameMap[id] || id;
+          return `<span class="filter-chip" data-id="${id}" data-mode="include">${name} ❌</span>`;
+        });
+        summary.push(`Includes: ${tags.join(' ')}`);
+      }
+
+      if (excludeIds.length) {
+        const tags = excludeIds.map(id => {
+          const name = idToNameMap[id] || id;
+          return `<span class="filter-chip" data-id="${id}" data-mode="exclude">${name} ❌</span>`;
+        });
+        summary.push(`Excludes: ${tags.join(' ')}`);
+      }
+
+      activeFiltersSummary.innerHTML = summary.length ? summary.join('<br>') : 'No active filters';
+
+      document.querySelectorAll('.filter-chip').forEach(el => {
+        el.addEventListener('click', () => {
+          const id = el.dataset.id;
+          const mode = el.dataset.mode;
+          removeFilter(id, mode);
+        });
+      });
+
+      display(cachedPhotos, sortOrderSelect.value, yearSelect.value);
+    }
+
+    function removeFilter(id, mode) {
+      if (mode === 'include') {
+        includeIds = includeIds.filter(i => String(i) !== String(id));
+      }
+      if (mode === 'exclude') {
+        excludeIds = excludeIds.filter(i => String(i) !== String(id));
+      }
+      updateActiveFiltersSummary();
+    }
+
+    async function fetchUsernameId(username) {
+      const res = await fetch(`/api/account?username=${encodeURIComponent(username)}`);
+      if (!res.ok) throw new Error(`Could not find user "${username}"`);
+      const data = await res.json();
+      idToNameMap[data.accountId] = data.username;
+      return data.accountId;
+    }
+
+    async function addUsernameToFilter() {
+      const username = filterUsernameInput.value.trim();
+      const mode = filterMode.value;
+      if (!username) return alert('Enter a username first.');
+
+      try {
+        const id = await fetchUsernameId(username);
+        if (mode === 'include' && !includeIds.includes(id)) includeIds.push(id);
+        if (mode === 'exclude' && !excludeIds.includes(id)) excludeIds.push(id);
+        updateActiveFiltersSummary();
+        filterUsernameInput.value = '';
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     async function fetchAll(playerId) {
-      let all = [];
-      let skip = 0;  // Leave 0
-      const take = 1000;  //This is how many photos it pulls at once
-      const delayMs = 500; //This is in miliseconds
-      // The current settings are recommended so you don't get rate limited.
-
+      let all = [], skip = 0, take = 1000;
       while (true) {
-        status.textContent = `Fetching... skip=${skip}`;
+        status.innerHTML = `Fetching... skip=${skip}`;
         const res = await fetch(`/api/feed?playerId=${playerId}&skip=${skip}&take=${take}`);
         if (!res.ok) {
-          status.textContent = `Error fetching: ${res.status}`;
+          status.textContent = `Error: ${res.status}`;
           break;
         }
-
         const data = await res.json();
-        if (data.length === 0) break;
-
+        if (!data.length) break;
         all.push(...data);
         skip += data.length;
-
-        await sleep(delayMs);
+        await new Promise(r => setTimeout(r, 500));
       }
-
       return all.reverse();
     }
 
-    function display(images, filterIds) {
+    function extractYears(images) {
+      const years = new Set();
+      images.forEach(img => {
+        if (img.CreatedAt) years.add(new Date(img.CreatedAt).getFullYear());
+      });
+      return [...years].sort((a, b) => a - b);
+    }
+
+    function updateYearDropdown(years) {
+      yearSelect.innerHTML = `<option value="all">All Years</option>`;
+      years.forEach(year => {
+        const opt = document.createElement('option');
+        opt.value = year;
+        opt.textContent = year;
+        yearSelect.appendChild(opt);
+      });
+    }
+
+    function display(images, sortOrder, selectedYear) {
       gallery.innerHTML = '';
       let count = 0;
-
       images.forEach(img => {
         const tagged = img.TaggedPlayerIds || [];
-        const match = filterIds.length === 0 || filterIds.some(id => tagged.includes(id));
-
-        if (match) {
+        const photoYear = new Date(img.CreatedAt).getFullYear();
+        const matchYear = selectedYear === 'all' || photoYear === parseInt(selectedYear);
+        const includesMatch = includeIds.length === 0 || includeIds.every(id => tagged.includes(id));
+        const excludesMatch = excludeIds.length === 0 || excludeIds.every(id => !tagged.includes(id));
+        if (matchYear && includesMatch && excludesMatch) {
           const link = document.createElement('a');
           link.href = `https://rec.net/image/${img.Id}`;
           link.target = '_blank';
-
+          link.className = 'photo-card';
           const el = document.createElement('img');
           el.src = `https://img.rec.net/${img.ImageName}`;
           el.alt = `Photo ${img.Id}`;
-
+          el.loading = 'lazy';
+          el.onload = () => el.classList.add('loaded');
           link.appendChild(el);
           gallery.appendChild(link);
           count++;
         }
       });
-
-      status.textContent = count === 0
-        ? 'No photos found with the selected filters.'
-        : `Found ${count} photos (oldest first)`;
+      status.textContent = count === 0 ? 'No photos found.' : `Found ${count} photos (${sortOrder} order)`;
     }
 
     async function load() {
-      const playerId = document.getElementById('playerIdInput').value.trim();
-      const filterRaw = document.getElementById('filterIdsInput').value.trim();
-
-      if (!playerId) return alert('Enter your Player ID');
-
-      const filterIds = filterRaw
-        .split(',')
-        .map(id => parseInt(id.trim()))
-        .filter(id => !isNaN(id) && id !== parseInt(playerId));
-
+      const username = usernameInput.value.trim();
+      if (!username) return alert('Enter your RecNet username.');
+      let playerId;
+      try {
+        playerId = await fetchUsernameId(username);
+      } catch (err) {
+        status.textContent = err.message;
+        return;
+      }
+      const sortOrder = sortOrderSelect.value;
+      const selectedYear = yearSelect.value;
       status.textContent = 'Loading...';
       const images = await fetchAll(playerId);
-      display(images, filterIds);
+      cachedPhotos = [...images];
+      if (sortOrder === 'newest') cachedPhotos.reverse();
+      const years = extractYears(cachedPhotos);
+      updateYearDropdown(years);
+      display(cachedPhotos, sortOrder, selectedYear);
     }
+
+    loadBtn.addEventListener('click', load);
+    yearSelect.addEventListener('change', () => display(cachedPhotos, sortOrderSelect.value, yearSelect.value));
   </script>
 </body>
 </html>
