@@ -2,6 +2,8 @@
 
 This project is used to check what photos you're mentioned in. Typically on rec.net you would have to scroll thousands of photos just to go back and that's it the website doesn't break. With this project you can use different filters to choose what photos you're looking for
 
+For support, questions, and suggestions contact "pxdzy" on discord
+
 # How To Use
 Load up the app and enter an account name in the "Enter Account Name" section.
 
